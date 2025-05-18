@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Chat Room {{ room_code }}</title>
+    <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
+    <style>
+        /* Basic layout - you can style as you want */
+        #chat {
+            border: 1px solid #ccc;
+            height: 400px;
+            overflow-y: scroll;
+            padding: 10px;
+        }
+        #message-input {
+            width: 80%;
+        }
+        #send-btn {
+            width: 15%;
+        }
+        .message {
+            margin-bottom: 10px;
+        }
+        .message .sender {
+            font-weight: bold;
+        }
+        #typing {
+            font-style: italic;
+            color: gray;
+        }
+        #pinned-msg {
+            background: #ffffcc;
+            padding: 5px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <h2>Room: {{ room_code }}</h2>
+    <p>Logged in as: {{ username }}</p>
+    <div id="pinned-msg"></div>
+    <div id="chat"></div>
+    <p id="typing"></p>
+    <input id="message-input" autocomplete="off" placeholder="Type your message..." />
+    <button id="send-btn">Send</button>
+    <br /><br />
+    <input id="search-input" placeholder="Search messages..." />
+    <button id="search-btn">Search</button>
+    <button id="clear-search">Clear</button>
+    <div id="search-results"></div>
+
+    <script>
+        const socket = io();
+
+        const chat = document.getElementById('chat');
+        const messageInput = document.getElementById('message-input');
+        const sendBtn = document.getElementById('send-btn');
+        const typingIndicator = document.getElementById('typing');
+        const pinnedMsgDiv = document.getElementById('pinned-msg');
+        const searchInput = document.getElementById('search-input');
+        const searchBtn = document.getElementById('search-btn');
+        const clearSearchBtn = document.getElementById('clear-search');
+        const searchResultsDiv = document.getElementById('search-results');
+
+        const username = "{{ username }}";
+        const room_code = "{{ room_code }}";
+
+        function addMessage(msg) {
+            const div = document.createElement('div');
+            div.classList.add('message');
+            div.innerHTML = `<span class="sender">${msg.sender}:</span> ${msg.content} <small>(${new Date(msg.timestamp).toLocaleTimeString()})</small>`;
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        socket.on('connect', () => {
+            console.log('Connected');
+        });
+
+        socket.on('chat_history', (msgs) => {
+            chat.innerHTML = '';
+            msgs.forEach(addMessage);
+        });
+
+        socket.on('new_message', (msg) => {
+            addMessage(msg);
+        });
+
+        socket.on('user_typing', (data) => {
+            typingIndicator.textContent = data.username + ' is typing...';
+            setTimeout(() => { typingIndicator.textContent = ''; }, 3000);
+        });
+
+        socket.on('pinned_message', (msg) => {
+            pinnedMsgDiv.innerHTML = '<strong>Pinned:</strong> ' + msg.content;
+        });
+
+        sendBtn.addEventListener('click', () => {
+            const content = messageInput.value.trim();
+            if (content.length === 0) return;
+            socket.emit('send_message', { type: 'text', content: content });
+            messageInput.value = '';
+        });
+
+        messageInput.addEventListener('input', () => {
+            socket.emit('typing', {});
+        });
+
+        searchBtn.addEventListener('click', () => {
+            const query = searchInput.value.trim();
+            if (query.length === 0) return;
+            socket.emit('search_messages', { query: query });
+        });
+
+        socket.on('search_results', (results) => {
+            searchResultsDiv.innerHTML = '';
+            results.forEach(msg => {
+                const div = document.createElement('div');
+                div.innerHTML = `<b>${msg.sender}:</b> ${msg.content} <small>(${new Date(msg.timestamp).toLocaleString()})</small>`;
+                searchResultsDiv.appendChild(div);
+            });
+        });
+
+        clearSearchBtn.addEventListener('click', () => {
+            searchResultsDiv.innerHTML = '';
+            searchInput.value = '';
+        });
+    </script>
+</body>
+</html>
